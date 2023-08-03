@@ -37,6 +37,7 @@ type Cache[T any] interface {
 	Reset()
 	ItemCount() int
 	DeleteExpired()
+	Delete(k string)
 }
 
 // genericCache is the implementation of the Cache interface.
@@ -133,6 +134,20 @@ func (r *genericCache[T]) DeleteExpired() {
 				continue
 			}
 			r.options[i].OnEvicted(v.key, v.value)
+		}
+	}
+}
+
+func (r *genericCache[T]) Delete(k string) {
+	r.mu.Lock()
+	v, evicted := r.delete(k)
+	r.mu.Unlock()
+	if evicted {
+		for i := range r.options {
+			if r.options[i].OnEvicted == nil {
+				continue
+			}
+			r.options[i].OnEvicted(k, v)
 		}
 	}
 }
