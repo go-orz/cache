@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	c := cache.New[string](time.Minute)
+	c := cache.New[string,string](time.Minute)
 
 	c.Set("key", "value", 5*time.Minute)
 	v, found := c.Get("key")
