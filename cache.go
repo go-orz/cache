@@ -35,6 +35,7 @@ type Cache[T any] interface {
 	Replace(k string, v T, d time.Duration) error
 	Get(k string) (T, bool)
 	GetWithExpiration(k string) (T, time.Time, bool)
+	Keys() []string
 	Items() map[string]Item[T]
 	Reset()
 	ItemCount() int
@@ -163,6 +164,22 @@ func (r *genericCache[T]) delete(k string) (T, bool) {
 	}
 	delete(r.items, k)
 	return v.Value, true
+}
+
+// Keys returns a slice of all items key within cache.
+func (r *genericCache[T]) Keys() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	keys := make([]string, len(r.items))
+	var index = 0
+	for k, v := range r.items {
+		if v.Expired() {
+			continue
+		}
+		keys[index] = k
+		index++
+	}
+	return keys
 }
 
 // Items returns a map of all items within cache.
