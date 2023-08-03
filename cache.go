@@ -9,8 +9,10 @@ import (
 
 var (
 	ErrKeyAlreadyExists = errors.New("key already exists")
-	ErrKeyNotExists     = errors.New("key doesn't exist")
+	ErrKeyNotExists     = errors.New("key doesn't exists")
 )
+
+const NeverExpired = 0
 
 // Item represents a cache item that can hold any type.
 type Item[T any] struct {
