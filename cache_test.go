@@ -135,7 +135,18 @@ func TestDeleteExpired(t *testing.T) {
 	}
 }
 
-func TestOn(t *testing.T) {
+func TestDelete(t *testing.T) {
+	c := New[int](time.Millisecond * 200)
+
+	c.Set("key1", 1, time.Second*100)
+	c.Delete("key1")
+	_, exists := c.Get("key1")
+	if exists {
+		t.Errorf("Failed to delete expired")
+	}
+}
+
+func TestOnEvicted(t *testing.T) {
 	var (
 		key string
 		val int
