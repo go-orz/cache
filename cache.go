@@ -15,13 +15,13 @@ var (
 const NeverExpired = 0
 
 // Item represents a cache item that can hold any type.
-type Item[T any] struct {
-	Value      T
+type Item[V any] struct {
+	Value      V
 	Expiration time.Time
 }
 
 // Expired checks whether the cache item has expired.
-func (item Item[T]) Expired() bool {
+func (item Item[V]) Expired() bool {
 	if item.Expiration.IsZero() {
 		return false
 	}
@@ -29,58 +29,58 @@ func (item Item[T]) Expired() bool {
 }
 
 // Cache is the interface that represents common cache functionality.
-type Cache[T any] interface {
-	Set(k string, v T, d time.Duration)
-	Add(k string, v T, d time.Duration) error
-	Replace(k string, v T, d time.Duration) error
-	Get(k string) (T, bool)
-	GetWithExpiration(k string) (T, time.Time, bool)
-	Keys() []string
-	Items() map[string]Item[T]
+type Cache[K comparable, V any] interface {
+	Set(k K, v V, d time.Duration)
+	Add(k K, v V, d time.Duration) error
+	Replace(k K, v V, d time.Duration) error
+	Get(k K) (V, bool)
+	GetWithExpiration(k K) (V, time.Time, bool)
+	Keys() []K
+	Items() map[K]Item[V]
 	Reset()
 	ItemCount() int
 	DeleteExpired()
-	Delete(k string)
+	Delete(k K)
 }
 
 // genericCache is the implementation of the Cache interface.
-type genericCache[T any] struct {
-	items   map[string]Item[T]
+type genericCache[K comparable, V any] struct {
+	items   map[K]Item[V]
 	mu      sync.RWMutex
-	options []Option[T]
+	options []Option[K, V]
 
 	cleanupInterval time.Duration
 	stop            chan struct{}
 }
 
 // wrapCache is a wrapper around a genericCache.
-type wrapCache[T any] struct {
-	*genericCache[T]
+type wrapCache[K comparable, V any] struct {
+	*genericCache[K, V]
 }
 
 type (
-	OnEvicted[T any] func(string, T)
-	OnStopped        func()
+	OnEvicted[K comparable, V any] func(K, V)
+	OnStopped                      func()
 )
 
-type Option[T any] struct {
-	OnEvicted OnEvicted[T]
+type Option[K comparable, V any] struct {
+	OnEvicted OnEvicted[K, V]
 	OnStopped OnStopped
 }
 
 // New creates a new cache with a given cleanup interval and callbacks for eviction and stopping events.
-func New[T any](cleanupInterval time.Duration, options ...Option[T]) Cache[T] {
-	c := genericCache[T]{
-		items:           make(map[string]Item[T]),
+func New[K comparable, V any](cleanupInterval time.Duration, options ...Option[K, V]) Cache[K, V] {
+	c := genericCache[K, V]{
+		items:           make(map[K]Item[V]),
 		cleanupInterval: cleanupInterval,
 		options:         options,
 	}
 
-	cache := wrapCache[T]{&c}
+	cache := wrapCache[K, V]{&c}
 
 	if cleanupInterval > 0 {
 		c.stop = make(chan struct{}, 1)
-		var stopNightKeeper = func(c *wrapCache[T]) {
+		var stopNightKeeper = func(c *wrapCache[K, V]) {
 			c.stop <- struct{}{}
 		}
 		go runNightKeeper(&c, cleanupInterval)
@@ -90,7 +90,7 @@ func New[T any](cleanupInterval time.Duration, options ...Option[T]) Cache[T] {
 }
 
 // runNightKeeper is a goroutine that periodically checks the cache for expired items.
-func runNightKeeper[T any](c *genericCache[T], cleanupInterval time.Duration) {
+func runNightKeeper[K comparable, V any](c *genericCache[K, V], cleanupInterval time.Duration) {
 	ticker := time.NewTicker(cleanupInterval)
 	for {
 		select {
@@ -110,10 +110,10 @@ func runNightKeeper[T any](c *genericCache[T], cleanupInterval time.Duration) {
 }
 
 // DeleteExpired removes all items that have expired from the cache.
-func (r *genericCache[T]) DeleteExpired() {
+func (r *genericCache[K, V]) DeleteExpired() {
 	var evictedItems []struct {
-		key   string
-		value T
+		key   K
+		value V
 	}
 
 	r.mu.Lock()
@@ -124,8 +124,8 @@ func (r *genericCache[T]) DeleteExpired() {
 		ov, evicted := r.delete(k)
 		if evicted {
 			evictedItems = append(evictedItems, struct {
-				key   string
-				value T
+				key   K
+				value V
 			}{k, ov})
 		}
 	}
@@ -141,7 +141,7 @@ func (r *genericCache[T]) DeleteExpired() {
 	}
 }
 
-func (r *genericCache[T]) Delete(k string) {
+func (r *genericCache[K, V]) Delete(k K) {
 	r.mu.Lock()
 	v, evicted := r.delete(k)
 	r.mu.Unlock()
@@ -156,10 +156,10 @@ func (r *genericCache[T]) Delete(k string) {
 }
 
 // delete removes a cache item if eviction is enabled.
-func (r *genericCache[T]) delete(k string) (T, bool) {
+func (r *genericCache[K, V]) delete(k K) (V, bool) {
 	v, found := r.items[k]
 	if !found {
-		var t T
+		var t V
 		return t, false
 	}
 	delete(r.items, k)
@@ -167,10 +167,10 @@ func (r *genericCache[T]) delete(k string) (T, bool) {
 }
 
 // Keys returns a slice of all items key within cache.
-func (r *genericCache[T]) Keys() []string {
+func (r *genericCache[K, V]) Keys() []K {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	keys := make([]string, len(r.items))
+	keys := make([]K, len(r.items))
 	var index = 0
 	for k, v := range r.items {
 		if v.Expired() {
@@ -183,10 +183,10 @@ func (r *genericCache[T]) Keys() []string {
 }
 
 // Items returns a map of all items within cache.
-func (r *genericCache[T]) Items() map[string]Item[T] {
+func (r *genericCache[K, V]) Items() map[K]Item[V] {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	m := make(map[string]Item[T], len(r.items))
+	m := make(map[K]Item[V], len(r.items))
 	for k, v := range r.items {
 		if v.Expired() {
 			continue
@@ -197,26 +197,26 @@ func (r *genericCache[T]) Items() map[string]Item[T] {
 }
 
 // Set sets a cache item assuming the cache has already been locked.
-func (r *genericCache[T]) Set(k string, v T, d time.Duration) {
+func (r *genericCache[K, V]) Set(k K, v V, d time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.setLocked(k, v, d)
 }
 
 // setLocked sets a cache item, assuming that the cache lock has already been locked.
-func (r *genericCache[T]) setLocked(k string, v T, d time.Duration) {
+func (r *genericCache[K, V]) setLocked(k K, v V, d time.Duration) {
 	var e time.Time
 	if d > 0 {
 		e = time.Now().Add(d)
 	}
-	r.items[k] = Item[T]{
+	r.items[k] = Item[V]{
 		Value:      v,
 		Expiration: e,
 	}
 }
 
 // Add adds a new cache item if the key does not already exist.
-func (r *genericCache[T]) Add(k string, v T, d time.Duration) error {
+func (r *genericCache[K, V]) Add(k K, v V, d time.Duration) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	_, found := r.get(k)
@@ -229,7 +229,7 @@ func (r *genericCache[T]) Add(k string, v T, d time.Duration) error {
 }
 
 // Replace replaces a cache item if the key already exists.
-func (r *genericCache[T]) Replace(k string, v T, d time.Duration) error {
+func (r *genericCache[K, V]) Replace(k K, v V, d time.Duration) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	_, found := r.get(k)
@@ -241,41 +241,41 @@ func (r *genericCache[T]) Replace(k string, v T, d time.Duration) error {
 }
 
 // Get returns a cache item by key.
-func (r *genericCache[T]) Get(k string) (T, bool) {
+func (r *genericCache[K, V]) Get(k K) (V, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	item, found := r.items[k]
 	if !found || item.Expired() {
-		var t T
+		var t V
 		return t, false
 	}
 	return item.Value, true
 }
 
 // GetWithExpiration returns a cache item and its expiration time by key.
-func (r *genericCache[T]) GetWithExpiration(k string) (T, time.Time, bool) {
+func (r *genericCache[K, V]) GetWithExpiration(k K) (V, time.Time, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	item, found := r.items[k]
 	if !found || item.Expired() {
-		var t T
+		var t V
 		return t, time.Time{}, false
 	}
 	return item.Value, item.Expiration, true
 }
 
 // get returns a value from the cache.
-func (r *genericCache[T]) get(k string) (T, bool) {
+func (r *genericCache[K, V]) get(k K) (V, bool) {
 	item, found := r.items[k]
 	if !found || item.Expired() {
-		var t T
+		var t V
 		return t, false
 	}
 	return item.Value, true
 }
 
 // ItemCount counts the number of items in the cache.
-func (r *genericCache[T]) ItemCount() int {
+func (r *genericCache[K, V]) ItemCount() int {
 	r.mu.RLock()
 	n := len(r.items)
 	r.mu.RUnlock()
@@ -283,11 +283,11 @@ func (r *genericCache[T]) ItemCount() int {
 }
 
 // Reset removes all items from the cache.
-func (r *genericCache[T]) Reset() {
+func (r *genericCache[K, V]) Reset() {
 	r.mu.Lock()
-	r.items = map[string]Item[T]{}
+	r.items = map[K]Item[V]{}
 	r.mu.Unlock()
 }
 
 // _ is an assertion that genericCache implements Cache.
-var _ Cache[string] = &(genericCache[string]{})
+var _ Cache[string, int] = (*genericCache[string, int])(nil)

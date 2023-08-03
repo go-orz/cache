@@ -15,7 +15,7 @@ type TestStruct struct {
 }
 
 func TestCache(t *testing.T) {
-	c := New[int](time.Millisecond * 100)
+	c := New[string, int](time.Millisecond * 100)
 
 	c.Set("key1", 1, time.Millisecond*200)
 	val, exists := c.Get("key1")
@@ -53,7 +53,7 @@ func TestCache(t *testing.T) {
 	}
 }
 func TestSet(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, 0)
 	val, exists := c.Get("key1")
@@ -63,7 +63,7 @@ func TestSet(t *testing.T) {
 }
 
 func TestReplace(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 
 	err := c.Replace("key1", 1, 0)
 	if err == nil {
@@ -84,7 +84,7 @@ func TestReplace(t *testing.T) {
 }
 
 func TestItems(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 
 	for i := 0; i < 10; i++ {
 		c.Set(strconv.Itoa(i), i, 0)
@@ -101,7 +101,7 @@ func TestItems(t *testing.T) {
 }
 
 func TestItemCount(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 
 	for i := 0; i < 10; i++ {
 		c.Set(strconv.Itoa(i), i, 0)
@@ -113,7 +113,7 @@ func TestItemCount(t *testing.T) {
 }
 
 func TestGetWithExpiration(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, time.Millisecond*100)
 	_, expiration, _ := c.GetWithExpiration("key1")
@@ -124,7 +124,7 @@ func TestGetWithExpiration(t *testing.T) {
 }
 
 func TestDeleteExpired(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, time.Millisecond*100)
 	time.Sleep(time.Millisecond * 210)
@@ -136,7 +136,7 @@ func TestDeleteExpired(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, time.Second*100)
 	c.Delete("key1")
@@ -152,12 +152,11 @@ func TestOnEvicted(t *testing.T) {
 		val int
 		mu  sync.Mutex
 	)
-	c := New[int](time.Millisecond*100, Option[int]{
+	c := New[string, int](time.Millisecond*100, Option[string, int]{
 		OnEvicted: func(s string, i int) {
 			mu.Lock()
 			key = s
 			val = i
-			t.Log(`evicted`, s, i)
 			mu.Unlock()
 		},
 	})
@@ -181,7 +180,7 @@ func TestOnEvicted(t *testing.T) {
 }
 
 func TestNeverExpired(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 	c.Set("key1", 1, NeverExpired)
 
 	_, exists := c.Get("key1")
@@ -194,7 +193,7 @@ func TestOnStopped(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	c := New[int](time.Millisecond*200, Option[int]{
+	c := New[string, int](time.Millisecond*200, Option[string, int]{
 		OnStopped: func() {
 			wg.Done()
 		},
@@ -208,7 +207,7 @@ func TestOnStopped(t *testing.T) {
 }
 
 func TestKeys(t *testing.T) {
-	c := New[int](time.Millisecond * 200)
+	c := New[string, int](time.Millisecond * 200)
 	c.Set("key1", 1, NeverExpired)
 	c.Set("key2", 1, time.Millisecond*100)
 
@@ -226,7 +225,7 @@ func TestKeys(t *testing.T) {
 
 // BenchmarkSet tests the performance of Set method.
 func BenchmarkSet(b *testing.B) {
-	cache := New[string](time.Minute)
+	cache := New[string, string](time.Minute)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -236,7 +235,7 @@ func BenchmarkSet(b *testing.B) {
 
 // BenchmarkGet tests the performance of Get method.
 func BenchmarkGet(b *testing.B) {
-	cache := New[string](time.Minute)
+	cache := New[string, string](time.Minute)
 	cache.Set("key", "value", time.Minute)
 
 	b.ResetTimer()
@@ -245,9 +244,19 @@ func BenchmarkGet(b *testing.B) {
 	}
 }
 
+func BenchmarkSyncMapGet(b *testing.B) {
+	m := sync.Map{}
+	m.Store("key", "value")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Load("key")
+	}
+}
+
 // BenchmarkDeleteExpired tests the performance of DeleteExpired method.
 func BenchmarkDeleteExpired(b *testing.B) {
-	cache := New[string](time.Minute)
+	cache := New[string, string](time.Minute)
 	for i := 0; i < b.N; i++ {
 		cache.Set("key", "value", time.Minute)
 	}
@@ -258,7 +267,7 @@ func BenchmarkDeleteExpired(b *testing.B) {
 
 // BenchmarkReset tests the performance of Reset method.
 func BenchmarkReset(b *testing.B) {
-	cache := New[string](time.Minute)
+	cache := New[string, string](time.Minute)
 	for i := 0; i < b.N; i++ {
 		cache.Set("key", "value", time.Minute)
 	}
@@ -269,7 +278,7 @@ func BenchmarkReset(b *testing.B) {
 
 // BenchmarkAdd tests the performance of Add method.
 func BenchmarkAdd(b *testing.B) {
-	cache := New[string](time.Minute)
+	cache := New[string, string](time.Minute)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -282,7 +291,7 @@ func BenchmarkAdd(b *testing.B) {
 
 // BenchmarkReplace tests the performance of Replace method.
 func BenchmarkReplace(b *testing.B) {
-	cache := New[string](time.Minute)
+	cache := New[string, string](time.Minute)
 	cache.Set("key", "value", time.Minute)
 
 	b.ResetTimer()
