@@ -180,6 +180,16 @@ func TestOnEvicted(t *testing.T) {
 	mu.Unlock()
 }
 
+func TestNeverExpired(t *testing.T) {
+	c := New[int](time.Millisecond * 200)
+	c.Set("key1", 1, NeverExpired)
+
+	_, exists := c.Get("key1")
+	if !exists {
+		t.Errorf("Failed to set never expired key")
+	}
+}
+
 func TestOnStopped(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
