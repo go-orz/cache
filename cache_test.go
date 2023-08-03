@@ -207,6 +207,23 @@ func TestOnStopped(t *testing.T) {
 	wg.Wait()
 }
 
+func TestKeys(t *testing.T) {
+	c := New[int](time.Millisecond * 200)
+	c.Set("key1", 1, NeverExpired)
+	c.Set("key2", 1, time.Millisecond*100)
+
+	time.Sleep(time.Millisecond * 200)
+
+	keys := c.Keys()
+	if len(keys) != 1 {
+		t.Errorf("expect keys lenth is 1, but got %d", len(keys))
+	}
+
+	if keys[0] != "key1" {
+		t.Errorf("expect key is key1, but got %s", keys[0])
+	}
+}
+
 // BenchmarkSet tests the performance of Set method.
 func BenchmarkSet(b *testing.B) {
 	cache := New[string](time.Minute)
