@@ -16,16 +16,16 @@ const NeverExpired = 0
 
 // Item represents a cache item that can hold any type.
 type Item[V any] struct {
-	Value      V
-	Expiration time.Time
+	Value   V
+	Expires time.Time
 }
 
 // Expired checks whether the cache item has expired.
 func (item Item[V]) Expired() bool {
-	if item.Expiration.IsZero() {
+	if item.Expires.IsZero() {
 		return false
 	}
-	return time.Now().After(item.Expiration)
+	return time.Now().After(item.Expires)
 }
 
 // Cache is the interface that represents common cache functionality.
@@ -49,8 +49,7 @@ type genericCache[K comparable, V any] struct {
 	mu      sync.RWMutex
 	options []Option[K, V]
 
-	cleanupInterval time.Duration
-	stop            chan struct{}
+	stop chan struct{}
 }
 
 // wrapCache is a wrapper around a genericCache.
@@ -71,9 +70,8 @@ type Option[K comparable, V any] struct {
 // New creates a new cache with a given cleanup interval and callbacks for eviction and stopping events.
 func New[K comparable, V any](cleanupInterval time.Duration, options ...Option[K, V]) Cache[K, V] {
 	c := genericCache[K, V]{
-		items:           make(map[K]Item[V]),
-		cleanupInterval: cleanupInterval,
-		options:         options,
+		items:   make(map[K]Item[V]),
+		options: options,
 	}
 
 	cache := wrapCache[K, V]{&c}
@@ -98,11 +96,12 @@ func runNightKeeper[K comparable, V any](c *genericCache[K, V], cleanupInterval 
 			c.DeleteExpired()
 		case <-c.stop:
 			ticker.Stop()
-			for i := range c.options {
-				if c.options[i].OnStopped == nil {
+			options := c.options
+			for i := range options {
+				if options[i].OnStopped == nil {
 					continue
 				}
-				c.options[i].OnStopped()
+				options[i].OnStopped()
 			}
 			return
 		}
@@ -132,11 +131,12 @@ func (r *genericCache[K, V]) DeleteExpired() {
 	r.mu.Unlock()
 
 	for _, v := range evictedItems {
-		for i := range r.options {
-			if r.options[i].OnEvicted == nil {
+		options := r.options
+		for i := range options {
+			if options[i].OnEvicted == nil {
 				continue
 			}
-			r.options[i].OnEvicted(v.key, v.value)
+			options[i].OnEvicted(v.key, v.value)
 		}
 	}
 }
@@ -210,8 +210,8 @@ func (r *genericCache[K, V]) setLocked(k K, v V, d time.Duration) {
 		e = time.Now().Add(d)
 	}
 	r.items[k] = Item[V]{
-		Value:      v,
-		Expiration: e,
+		Value:   v,
+		Expires: e,
 	}
 }
 
@@ -261,10 +261,10 @@ func (r *genericCache[K, V]) GetWithExpiration(k K) (V, time.Time, bool) {
 		var t V
 		return t, time.Time{}, false
 	}
-	return item.Value, item.Expiration, true
+	return item.Value, item.Expires, true
 }
 
-// get returns a value from the cache.
+// get returns a Value from the cache.
 func (r *genericCache[K, V]) get(k K) (V, bool) {
 	item, found := r.items[k]
 	if !found || item.Expired() {

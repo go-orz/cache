@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"fmt"
 	"runtime"
 	"strconv"
 	"sync"
@@ -9,13 +8,8 @@ import (
 	"time"
 )
 
-type TestStruct struct {
-	Num      int
-	Children []*TestStruct
-}
-
-func TestCache(t *testing.T) {
-	c := New[string, int](time.Millisecond * 100)
+func TestSharded(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 100)
 
 	c.Set("key1", 1, time.Millisecond*200)
 	val, exists := c.Get("key1")
@@ -52,8 +46,8 @@ func TestCache(t *testing.T) {
 		t.Errorf("Failed to reset cache")
 	}
 }
-func TestSet(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedSet(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, 0)
 	val, exists := c.Get("key1")
@@ -62,8 +56,8 @@ func TestSet(t *testing.T) {
 	}
 }
 
-func TestReplace(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedReplace(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 
 	err := c.Replace("key1", 1, 0)
 	if err == nil {
@@ -83,8 +77,8 @@ func TestReplace(t *testing.T) {
 	}
 }
 
-func TestItems(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedItems(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 
 	for i := 0; i < 10; i++ {
 		c.Set(strconv.Itoa(i), i, 0)
@@ -100,8 +94,8 @@ func TestItems(t *testing.T) {
 	}
 }
 
-func TestItemCount(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedItemCount(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 
 	for i := 0; i < 10; i++ {
 		c.Set(strconv.Itoa(i), i, 0)
@@ -112,8 +106,8 @@ func TestItemCount(t *testing.T) {
 	}
 }
 
-func TestGetWithExpiration(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedGetWithExpiration(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, time.Millisecond*100)
 	_, expiration, _ := c.GetWithExpiration("key1")
@@ -123,8 +117,8 @@ func TestGetWithExpiration(t *testing.T) {
 	}
 }
 
-func TestDeleteExpired(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedDeleteExpired(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, time.Millisecond*100)
 	time.Sleep(time.Millisecond * 210)
@@ -135,8 +129,8 @@ func TestDeleteExpired(t *testing.T) {
 	}
 }
 
-func TestDelete(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedDelete(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 
 	c.Set("key1", 1, time.Second*100)
 	c.Delete("key1")
@@ -146,13 +140,13 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-func TestOnEvicted(t *testing.T) {
+func TestShardedOnEvicted(t *testing.T) {
 	var (
 		key string
 		val int
 		mu  sync.Mutex
 	)
-	c := New[string, int](time.Millisecond*100, Option[string, int]{
+	c := NewSharded[string, int](time.Millisecond*100, Option[string, int]{
 		OnEvicted: func(s string, i int) {
 			mu.Lock()
 			key = s
@@ -179,8 +173,8 @@ func TestOnEvicted(t *testing.T) {
 	mu.Unlock()
 }
 
-func TestNeverExpired(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedNeverExpired(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 	c.Set("key1", 1, NeverExpired)
 
 	_, exists := c.Get("key1")
@@ -189,11 +183,11 @@ func TestNeverExpired(t *testing.T) {
 	}
 }
 
-func TestOnStopped(t *testing.T) {
+func TestShardedOnStopped(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	c := New[string, int](time.Millisecond*200, Option[string, int]{
+	c := NewSharded[string, int](time.Millisecond*200, Option[string, int]{
 		OnStopped: func() {
 			wg.Done()
 		},
@@ -206,8 +200,8 @@ func TestOnStopped(t *testing.T) {
 	wg.Wait()
 }
 
-func TestKeys(t *testing.T) {
-	c := New[string, int](time.Millisecond * 200)
+func TestShardedKeys(t *testing.T) {
+	c := NewSharded[string, int](time.Millisecond * 200)
 	c.Set("key1", 1, NeverExpired)
 	c.Set("key2", 1, time.Millisecond*100)
 
@@ -216,89 +210,10 @@ func TestKeys(t *testing.T) {
 	keys := c.Keys()
 	if len(keys) != 1 {
 		t.Errorf("expect keys lenth is 1, but got %d", len(keys))
+		return
 	}
 
 	if keys[0] != "key1" {
 		t.Errorf("expect key is key1, but got %s", keys[0])
-	}
-}
-
-// BenchmarkSet tests the performance of Set method.
-func BenchmarkSet(b *testing.B) {
-	cache := New[string, string](time.Minute)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cache.Set("key", "Value", time.Minute)
-	}
-}
-
-// BenchmarkGet tests the performance of Get method.
-func BenchmarkGet(b *testing.B) {
-	cache := New[string, string](time.Minute)
-	cache.Set("key", "Value", time.Minute)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cache.Get("key")
-	}
-}
-
-func BenchmarkSyncMapGet(b *testing.B) {
-	m := sync.Map{}
-	m.Store("key", "Value")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		m.Load("key")
-	}
-}
-
-// BenchmarkDeleteExpired tests the performance of DeleteExpired method.
-func BenchmarkDeleteExpired(b *testing.B) {
-	cache := New[string, string](time.Minute)
-	for i := 0; i < b.N; i++ {
-		cache.Set("key", "Value", time.Minute)
-	}
-	b.ResetTimer()
-
-	cache.DeleteExpired()
-}
-
-// BenchmarkReset tests the performance of Reset method.
-func BenchmarkReset(b *testing.B) {
-	cache := New[string, string](time.Minute)
-	for i := 0; i < b.N; i++ {
-		cache.Set("key", "Value", time.Minute)
-	}
-	b.ResetTimer()
-
-	cache.Reset()
-}
-
-// BenchmarkAdd tests the performance of Add method.
-func BenchmarkAdd(b *testing.B) {
-	cache := New[string, string](time.Minute)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := cache.Add(fmt.Sprintf("key-%d", i), "Value", time.Minute)
-		if err != nil {
-			b.Error(err)
-		}
-	}
-}
-
-// BenchmarkReplace tests the performance of Replace method.
-func BenchmarkReplace(b *testing.B) {
-	cache := New[string, string](time.Minute)
-	cache.Set("key", "Value", time.Minute)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := cache.Replace("key", "Value", time.Minute)
-		if err != nil {
-			b.Error(err)
-		}
 	}
 }
